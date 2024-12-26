@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <curses.h>
 #include <errno.h>
 #include <stdio.h>
@@ -17,7 +18,47 @@
 
 int lines = 0;
 
-void handleCommand(char** const command) {
+typedef struct {
+    char** data; // its basically a pointer to an array or strings
+    size_t len;
+    size_t capacity;
+} DA;
+
+DA* MAKE_DA() {
+    DA* da = malloc(sizeof(DA) * 1); // allocate on heap (mf C)
+    da->capacity = 10;
+    da->len = 0;
+    da->data = malloc(sizeof(char*) * da->capacity);
+
+    return da;
+}
+
+void DA_APPEND(DA* da, char* str) {
+    if (da->len == da->capacity) {
+        da->capacity *= 2;
+        char** data = malloc(sizeof(char*) * da->capacity);
+        memmove(data, da->data, da->len);
+    }
+
+    da->data[da->len] = str;
+}
+
+char** const parseCommand(char* const prompt) {
+    DA* da = MAKE_DA();
+    char* tok = strtok(prompt, " ");
+    DA_APPEND(da, tok);
+
+    while ((tok = strtok(NULL, " ")) != NULL) {
+        DA_APPEND(da, tok);
+    }
+
+    return da->data;
+}
+
+void handleCommand(char* const prompt) {
+    // char** command = parseCommand(promt);
+    char** command = parseCommand(prompt);
+
     int fds[2];
     if (pipe(fds) == -1) { // Setup the pipe
         printw("Error creating pipe: %s\n", strerror(errno));
@@ -83,6 +124,9 @@ int main() {
     printw("%s", SHELL);
 
     int ch;
+    char prompt[1024] = {0};
+    size_t prompt_t = 0;
+
     while ((ch = getch()) != ERR) {
         // printw("{%s}", keyname(ch));
         #define ENTER '\n' // 10 is usually \n or \r
@@ -93,15 +137,37 @@ int main() {
             } break;
             case ENTER:
             case KEY_ENTER: {
-                printw("Command execution here");
-                lines += 2;
+                move(++lines, 0);
+                prompt[prompt_t] = '\0';
+                handleCommand(prompt);
+
+                prompt_t = 0;
+                lines++;
                 move(lines, 0);
                 printw(SHELL);
             } break;
             case KEY_BACKSPACE: {
-                printw("delete a char");
+                if (prompt_t == 0) break;
+
+                prompt_t--;
+
+                int x, y; // FIXME: leave it as is for now, refactor into function move_and_del_N_chars() and use also in "case '^W'"
+                getyx(stdscr, y, x);
+                move(y, x - 1);
+                printw("%c", ' ');
+                move(y, x - 1);
+                refresh();
             } break;
             default: {
+                if (!isprint(ch)) break;
+
+                if (prompt_t >= 1024) {
+                    endwin();
+                    printf("%s\n", "Reached max character limit of 1024 chars for shell promt");
+                    exit(130);
+                }
+
+                prompt[prompt_t++] = ch;
                 printw("%c", ch);
                 break;
             }
