@@ -1,3 +1,4 @@
-cc main.c -o main
+cc main.c -lm -lncurses \
+    -o main
 
 ./main
