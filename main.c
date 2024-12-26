@@ -8,6 +8,11 @@
 #include <sys/wait.h>
 #include <ncurses.h>
 
+#define CTRL(x) ((x) & 0x1f)
+
+#define QUIT CTRL('Q')
+#define ESCAPE CTRL('[')
+
 #define SHELL "[shec]$ "
 
 int lines = 0;
@@ -70,18 +75,39 @@ void handleCommand(char** const command) {
 int main() {
     // Initialize ncurses window
     initscr();
+    keypad(stdscr, TRUE);
     cbreak();
     noecho();
     move(0, 0);
 
     printw("%s", SHELL);
 
-    char* command[] = {"exa", "-lah", NULL}; // Example command
-    handleCommand(command);
+    int ch;
+    while ((ch = getch()) != ERR) {
+        // printw("{%s}", keyname(ch));
+        #define ENTER '\n' // 10 is usually \n or \r
+        switch (ch) {
+            case QUIT:
+            case ESCAPE: {
+                exit(0);
+            } break;
+            case ENTER:
+            case KEY_ENTER: {
+                printw("Command execution here");
+                lines += 2;
+                move(lines, 0);
+                printw(SHELL);
+            } break;
+            case KEY_BACKSPACE: {
+                printw("delete a char");
+            } break;
+            default: {
+                printw("%c", ch);
+                break;
+            }
+        }
+    }
 
-    move(lines, 0);
-
-    getch(); // Wait for user input
     endwin();
 
     return 0;
