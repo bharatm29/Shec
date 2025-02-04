@@ -5,16 +5,19 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <termios.h>
 #include <sys/wait.h>
 
-#define CTRL(x) ((x) & 0x1f)
 
+// FIXME: Conflicts with key macros from termios
 #define QUIT CTRL('Q')
 #define ESCAPE CTRL('[')
+#define KEY_BACKSPACE 8
 
 #define SHELL "[shec]$ "
 
-int lines = 0;
+#define MOVE_DOWN(LINE) printf("\E[%dB", LINE);
+#define MOVE_DOWN_START(LINE) printf("\E[%dE", LINE);
 
 typedef struct {
     char** data; // its basically a pointer to an array or strings
@@ -88,9 +91,11 @@ void handleCommand(char* const prompt) {
 
         while ((bytesRead = read(fds[0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytesRead] = '\0'; // Null-terminate the buffer
+            int lines = 0;
             for (int i = 0; i < bytesRead; i++) {
                 if (buffer[i] == '\n') {
-                    lines++;
+                    MOVE_DOWN_START(1);
+                    continue;
                 }
                 printf("%c", buffer[i]);
             }
@@ -111,8 +116,33 @@ void handleCommand(char* const prompt) {
     }
 }
 
+
+struct termios orig_termios;
+
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+
+void disableRawMode() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enableRawMode() {
+    tcgetattr(STDIN_FILENO, &orig_termios);
+
+    atexit(disableRawMode);
+
+    struct termios raw = orig_termios;
+
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
 int main() {
     // FIXME: Init a terminal session thing here
+    enableRawMode();
 
     printf("%s", SHELL);
 
@@ -129,29 +159,21 @@ int main() {
                 exit(0);
             } break;
             case ENTER: {
-                // move(++lines, 0);
+                MOVE_DOWN_START(1);
                 prompt[prompt_t] = '\0';
                 handleCommand(prompt);
 
                 prompt_t = 0;
-                lines++;
-                // move(lines, 0);
+                MOVE_DOWN_START(1);
                 printf(SHELL);
             } break;
-            /* TODO: Figure out char for backspace
             case KEY_BACKSPACE: {
                 if (prompt_t == 0) break;
 
                 prompt_t--;
 
-                // FIXME: Port this to ANSI Codes
-                int x, y; // FIXME: leave it as is for now, refactor into function move_and_del_N_chars() and use also in "case '^W'"
-                // getyx(stdscr, y, x);
-                move(y, x - 1);
-                printf("%c", ' ');
-                move(y, x - 1);
+                printf("\E[%dC ", 1);
             } break;
-            */
             default: {
                 if (!isprint(ch)) break;
 
