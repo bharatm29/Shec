@@ -1,5 +1,4 @@
 #include <ctype.h>
-#include <curses.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +6,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <ncurses.h>
 
 #define CTRL(x) ((x) & 0x1f)
 
@@ -61,14 +59,14 @@ void handleCommand(char* const prompt) {
 
     int fds[2];
     if (pipe(fds) == -1) { // Setup the pipe
-        printw("Error creating pipe: %s\n", strerror(errno));
+        printf("Error creating pipe: %s\n", strerror(errno));
         return;
     }
 
     const int cpid = fork();
 
     if (cpid < 0) { // Error in fork
-        printw("Fork error: %s\n", strerror(errno));
+        printf("Fork error: %s\n", strerror(errno));
         return;
     }
 
@@ -94,13 +92,13 @@ void handleCommand(char* const prompt) {
                 if (buffer[i] == '\n') {
                     lines++;
                 }
-                printw("%c", buffer[i]);
+                printf("%c", buffer[i]);
             }
-            // printw("%s", buffer); // Print to the ncurses window
+            // printf("%s", buffer); // Print to the ncurses window
         }
 
         if (bytesRead == -1) {
-            printw("Error reading from pipe: %s\n", strerror(errno));
+            printf("Error reading from pipe: %s\n", strerror(errno));
         }
 
         close(fds[0]); // Close read end of the pipe
@@ -108,73 +106,66 @@ void handleCommand(char* const prompt) {
         waitpid(cpid, &wstatus, 0); // Wait for child process to finish
 
         if (!WIFEXITED(wstatus)) {
-            printw("Child process exited abnormally!\n");
+            printf("Child process exited abnormally!\n");
         }
     }
 }
 
 int main() {
-    // Initialize ncurses window
-    initscr();
-    keypad(stdscr, TRUE);
-    cbreak();
-    noecho();
-    move(0, 0);
+    // FIXME: Init a terminal session thing here
 
-    printw("%s", SHELL);
+    printf("%s", SHELL);
 
     int ch;
     char prompt[1024] = {0};
     size_t prompt_t = 0;
 
-    while ((ch = getch()) != ERR) {
-        // printw("{%s}", keyname(ch));
+    while ((ch = getchar()) != EOF) {
+        // printf("{%s}", keyname(ch));
         #define ENTER '\n' // 10 is usually \n or \r
         switch (ch) {
             case QUIT:
             case ESCAPE: {
                 exit(0);
             } break;
-            case ENTER:
-            case KEY_ENTER: {
-                move(++lines, 0);
+            case ENTER: {
+                // move(++lines, 0);
                 prompt[prompt_t] = '\0';
                 handleCommand(prompt);
 
                 prompt_t = 0;
                 lines++;
-                move(lines, 0);
-                printw(SHELL);
+                // move(lines, 0);
+                printf(SHELL);
             } break;
+            /* TODO: Figure out char for backspace
             case KEY_BACKSPACE: {
                 if (prompt_t == 0) break;
 
                 prompt_t--;
 
+                // FIXME: Port this to ANSI Codes
                 int x, y; // FIXME: leave it as is for now, refactor into function move_and_del_N_chars() and use also in "case '^W'"
-                getyx(stdscr, y, x);
+                // getyx(stdscr, y, x);
                 move(y, x - 1);
-                printw("%c", ' ');
+                printf("%c", ' ');
                 move(y, x - 1);
-                refresh();
             } break;
+            */
             default: {
                 if (!isprint(ch)) break;
 
                 if (prompt_t >= 1024) {
-                    endwin();
                     printf("%s\n", "Reached max character limit of 1024 chars for shell promt");
                     exit(130);
                 }
 
                 prompt[prompt_t++] = ch;
-                printw("%c", ch);
+                printf("%c", ch);
                 break;
             }
         }
     }
-
-    endwin();
 
     return 0;
 }
