@@ -10,7 +10,7 @@
 
 
 // FIXME: Conflicts with key macros from termios
-#define QUIT CTRL('Q')
+#define QUIT CTRL('d')
 #define ESCAPE CTRL('[')
 #define KEY_BACKSPACE 8
 
@@ -76,7 +76,7 @@ void handleCommand(char* const prompt) {
     if (cpid == 0) { // Child process
         close(fds[0]); // child doesn't read
         dup2(fds[1], STDOUT_FILENO); // stdout -> child's write end
-        dup2(fds[1], STDERR_FILENO); // stdout -> child's write end
+        dup2(fds[1], STDERR_FILENO); // stderr -> child's write end
 
         close(fds[1]); // close write end after redirecting
 
@@ -93,13 +93,14 @@ void handleCommand(char* const prompt) {
             buffer[bytesRead] = '\0'; // Null-terminate the buffer
             int lines = 0;
             for (int i = 0; i < bytesRead; i++) {
-                if (buffer[i] == '\n') {
+                /*
+                if (buffer[i] == '\n') { // kinda uncessary
                     MOVE_DOWN_START(1);
                     continue;
                 }
+                */
                 printf("%c", buffer[i]);
             }
-            // printf("%s", buffer); // Print to the ncurses window
         }
 
         if (bytesRead == -1) {
@@ -156,6 +157,7 @@ int main() {
         switch (ch) {
             case QUIT:
             case ESCAPE: {
+                printf("\n");
                 exit(0);
             } break;
             case ENTER: {
@@ -168,7 +170,7 @@ int main() {
                 printf(SHELL);
             } break;
             case KEY_BACKSPACE: {
-                if (prompt_t == 0) break;
+                if (prompt_t <= 0) break;
 
                 prompt_t--;
 
