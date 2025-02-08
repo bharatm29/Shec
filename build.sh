@@ -1,4 +1,4 @@
-cc main.c -lm -lncurses \
+cc -ggdb main.c -lm -lncurses \
     -o main
 
 ./main

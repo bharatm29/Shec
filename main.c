@@ -20,7 +20,7 @@
 #define MOVE_DOWN_START(LINE) printf("\E[%dE", LINE);
 
 typedef struct {
-    char** data; // its basically a pointer to an array or strings
+    char** data; // its basically a pointer to an array of strings
     size_t len;
     size_t capacity;
 } DA;
@@ -41,7 +41,7 @@ void DA_APPEND(DA* da, char* str) {
         memmove(data, da->data, da->len);
     }
 
-    da->data[da->len] = str;
+    da->data[da->len++] = str;
 }
 
 char** const parseCommand(char* const prompt) {
@@ -57,7 +57,6 @@ char** const parseCommand(char* const prompt) {
 }
 
 void handleCommand(char* const prompt) {
-    // char** command = parseCommand(promt);
     char** command = parseCommand(prompt);
 
     int fds[2];
@@ -93,12 +92,6 @@ void handleCommand(char* const prompt) {
             buffer[bytesRead] = '\0'; // Null-terminate the buffer
             int lines = 0;
             for (int i = 0; i < bytesRead; i++) {
-                /*
-                if (buffer[i] == '\n') { // kinda uncessary
-                    MOVE_DOWN_START(1);
-                    continue;
-                }
-                */
                 printf("%c", buffer[i]);
             }
         }
@@ -136,7 +129,7 @@ void enableRawMode() {
 
     struct termios raw = orig_termios;
 
-    raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG | BSDLY);
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
@@ -161,6 +154,12 @@ int main() {
                 exit(0);
             } break;
             case ENTER: {
+                if (prompt_t == 0) {
+                    MOVE_DOWN_START(1);
+                    printf(SHELL);
+                    continue;
+                }
+
                 MOVE_DOWN_START(1);
                 prompt[prompt_t] = '\0';
                 handleCommand(prompt);
@@ -169,7 +168,7 @@ int main() {
                 MOVE_DOWN_START(1);
                 printf(SHELL);
             } break;
-            case KEY_BACKSPACE: {
+            case KEY_BACKSPACE: { // KEY_BACKSPACE = 8
                 if (prompt_t <= 0) break;
 
                 prompt_t--;
