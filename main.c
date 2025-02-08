@@ -12,7 +12,7 @@
 // FIXME: Conflicts with key macros from termios
 #define QUIT CTRL('d')
 #define ESCAPE CTRL('[')
-#define KEY_BACKSPACE 8
+#define KEY_BACKSPACE 127
 
 #define SHELL "[shec]$ "
 
@@ -47,6 +47,10 @@ void DA_APPEND(DA* da, char* str) {
 char** const parseCommand(char* const prompt) {
     DA* da = MAKE_DA();
     char* tok = strtok(prompt, " ");
+    if (strcmp(tok, "exit") == 0) {
+        exit(0);
+    }
+
     DA_APPEND(da, tok);
 
     while ((tok = strtok(NULL, " ")) != NULL) {
@@ -56,6 +60,7 @@ char** const parseCommand(char* const prompt) {
     return da->data;
 }
 
+void enableRawMode();
 void handleCommand(char* const prompt) {
     char** command = parseCommand(prompt);
 
@@ -90,10 +95,12 @@ void handleCommand(char* const prompt) {
 
         while ((bytesRead = read(fds[0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytesRead] = '\0'; // Null-terminate the buffer
-            int lines = 0;
+            /* remove this if we are not doing manual cursor movements
             for (int i = 0; i < bytesRead; i++) {
                 printf("%c", buffer[i]);
             }
+            */
+            printf("%s", buffer);
         }
 
         if (bytesRead == -1) {
@@ -107,6 +114,8 @@ void handleCommand(char* const prompt) {
         if (!WIFEXITED(wstatus)) {
             printf("Child process exited abnormally!\n");
         }
+
+        enableRawMode(); // since execvp changes terminal settings, we have to call this shit here again
     }
 }
 
@@ -129,13 +138,15 @@ void enableRawMode() {
 
     struct termios raw = orig_termios;
 
-    raw.c_lflag &= ~(ECHO | ICANON | ISIG | BSDLY);
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
+    raw.c_iflag &= ~(IXON | ICRNL);
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 int main() {
     // FIXME: Init a terminal session thing here
+    setvbuf(stdout, NULL, _IONBF, 0);
     enableRawMode();
 
     printf("%s", SHELL);
@@ -144,16 +155,32 @@ int main() {
     char prompt[1024] = {0};
     size_t prompt_t = 0;
 
-    while ((ch = getchar()) != EOF) {
+    while (read(STDIN_FILENO, &ch, 1) == 1) {
         // printf("{%s}", keyname(ch));
-        #define ENTER '\n' // 10 is usually \n or \r
         switch (ch) {
-            case QUIT:
-            case ESCAPE: {
+            case QUIT: {
                 printf("\n");
                 exit(0);
             } break;
-            case ENTER: {
+            case CTRL('h'):
+            case KEY_BACKSPACE: {
+                if (prompt_t <= 0) break;
+
+                prompt_t--;
+
+                printf("\E[1D \E[1D");
+            } break;
+            case CTRL('l'): { // clear screen
+                printf("\E[H\E[2J");
+                printf(SHELL);
+            } break;
+
+            case ESCAPE: {
+                printf("Something happend\n");
+            } break;
+
+            case '\n': // ENTER
+            case '\r': { // \n and \r since its byte-by-byte input in raw mode
                 if (prompt_t == 0) {
                     MOVE_DOWN_START(1);
                     printf(SHELL);
@@ -167,13 +194,6 @@ int main() {
                 prompt_t = 0;
                 MOVE_DOWN_START(1);
                 printf(SHELL);
-            } break;
-            case KEY_BACKSPACE: { // KEY_BACKSPACE = 8
-                if (prompt_t <= 0) break;
-
-                prompt_t--;
-
-                printf("\E[%dC ", 1);
             } break;
             default: {
                 if (!isprint(ch)) break;
