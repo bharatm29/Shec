@@ -9,7 +9,6 @@
 #include <sys/wait.h>
 
 
-// FIXME: Conflicts with key macros from termios
 #define QUIT CTRL('d')
 #define ESCAPE CTRL('[')
 #define KEY_BACKSPACE 127
@@ -95,11 +94,6 @@ void handleCommand(char* const prompt) {
 
         while ((bytesRead = read(fds[0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytesRead] = '\0'; // Null-terminate the buffer
-            /* remove this if we are not doing manual cursor movements
-            for (int i = 0; i < bytesRead; i++) {
-                printf("%c", buffer[i]);
-            }
-            */
             printf("%s", buffer);
         }
 
@@ -145,18 +139,19 @@ void enableRawMode() {
 }
 
 int main() {
-    // FIXME: Init a terminal session thing here
     setvbuf(stdout, NULL, _IONBF, 0);
     enableRawMode();
 
     printf("%s", SHELL);
 
     int ch;
-    char prompt[1024] = {0};
+    char* prompt = malloc(sizeof(char) * 1024);
     size_t prompt_t = 0;
 
+    DA* history = MAKE_DA();
+    size_t hist_back = 0;
+
     while (read(STDIN_FILENO, &ch, 1) == 1) {
-        // printf("{%s}", keyname(ch));
         switch (ch) {
             case QUIT: {
                 printf("\n");
@@ -181,15 +176,16 @@ int main() {
 
             case '\n': // ENTER
             case '\r': { // \n and \r since its byte-by-byte input in raw mode
-                if (prompt_t == 0) {
+                if (prompt_t > 0) {
                     MOVE_DOWN_START(1);
-                    printf(SHELL);
-                    continue;
-                }
 
-                MOVE_DOWN_START(1);
-                prompt[prompt_t] = '\0';
-                handleCommand(prompt);
+                    prompt[prompt_t] = '\0';
+
+                    DA_APPEND(history, strndup(prompt, prompt_t + 1));
+
+                    handleCommand(prompt);
+                    hist_back = 0;
+                }
 
                 prompt_t = 0;
                 MOVE_DOWN_START(1);
