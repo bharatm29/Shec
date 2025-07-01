@@ -77,7 +77,8 @@ void handleCommand(char* const prompt) {
     }
 
     if (cpid == 0) { // Child process
-        close(fds[0]); // child doesn't read
+        close(fds[0]);
+
         dup2(fds[1], STDOUT_FILENO); // stdout -> child's write end
         dup2(fds[1], STDERR_FILENO); // stderr -> child's write end
 
